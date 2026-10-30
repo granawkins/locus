@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initialize, profileArguments } from '../src/settings.js';
+import { initialize, profileArguments } from '../bin/locus.js';
 
 function workspace(t) {
   const directory = mkdtempSync(join(tmpdir(), 'locus-settings-'));
@@ -17,7 +17,7 @@ test('initialization inherits defaults and preserves existing settings, instruct
   assert.equal(existsSync(join(directory, 'AGENTS.md')), false);
   assert.deepEqual(profileArguments(directory), []);
   const profile = join(directory, '.locus/settings.json');
-  const template = JSON.parse(readFileSync(new URL('../templates/settings.template.json', import.meta.url)));
+  const template = JSON.parse(readFileSync(new URL('../settings.template.json', import.meta.url)));
   assert.deepEqual(JSON.parse(readFileSync(profile)), template);
   writeFileSync(profile, JSON.stringify({ model: 'mock/test', customInstructions: 'Keep audit evidence.' }));
   writeFileSync(join(directory, 'AGENTS.md'), 'Existing instructions');

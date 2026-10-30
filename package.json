@@ -1,7 +1,7 @@
 {
   "name": "@granawkins/locus",
   "version": "0.1.0",
-  "description": "Persistent, directory-bound agents powered by Pi, for people and other agents.",
+  "description": "The patron saint of a directory: one persistent Pi agent per catalog item.",
   "license": "MIT",
   "author": "granawkins",
   "repository": {
@@ -11,7 +11,7 @@
   "homepage": "https://github.com/granawkins/locus#readme",
   "bugs": { "url": "https://github.com/granawkins/locus/issues" },
   "keywords": ["agent", "cli", "pi", "persistent", "agent-skills"],
-  "files": ["bin/", "src/", "templates/", "skills/", "system-prompt.md"],
+  "files": ["bin/", "skills/", "system-prompt.md", "settings.template.json"],
   "publishConfig": { "access": "public" },
   "type": "module",
   "bin": { "locus": "bin/locus.js" },
