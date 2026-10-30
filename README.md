@@ -73,15 +73,14 @@ Read `bin/locus.js` for the entire implementation.
 
 Edit `system-prompt.md` in this repository, then restart `locus`. Every directory
 uses this shared file, including when resuming an existing conversation. It is
-a snapshot of Pi 1.4.0's default identity, tool descriptions, guidelines, and
-documentation references, ready for you to customize. Documentation paths in
-the snapshot point to this installation of Pi.
+the identity and behavior of Loki, a persistent directory agent, together with
+Pi documentation references. Documentation paths point to this installation
+of Pi.
 
 Locus passes the file to Pi's `--system-prompt` option, replacing the default
 coding-assistant prompt. Pi still appends discovered project instructions,
 skill descriptions, and the current working directory. Tool schemas remain
-supplied by Pi; the copied tool descriptions are a static snapshot of its four
-default tools. A caller can explicitly override the file with `--system-prompt`.
+supplied by Pi. A caller can explicitly override the file with `--system-prompt`.
 
 There is no Locus-wide memory. Conversation history lives in each directory's
 `.locus/`. The shared `~/.locus/agent/` directory holds configuration,
