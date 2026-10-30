@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execve } from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -31,17 +31,7 @@ Requires Linux flock and Node.js 22.19 or newer.`);
 if (args[0] === 'init') {
   if (args.length !== 1) fail('usage: locus init');
   mkdirSync(state, { recursive: true });
-  const instructions = join(directory, 'AGENTS.md');
-  if (!existsSync(instructions)) {
-    writeFileSync(instructions, `# Directory agent
-
-You are the resident agent for this directory. Continue the work recorded
-in your conversation. Keep useful notes and working files here as needed.
-Inspect existing files before making changes. Use the available skills
-and tools. Leave .locus/ session files to Pi; do not edit them yourself.
-`, { flag: 'wx' });
-  }
-  console.log('Initialized .locus/ (existing instructions and history preserved).\nRun locus to start chatting.');
+  console.log('Initialized .locus/ (existing history preserved).\nRun locus to start chatting.');
   process.exit(0);
 }
 
@@ -58,11 +48,13 @@ for (const arg of args.slice(0, args.indexOf('--') < 0 ? args.length : args.inde
 
 const piEntry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));
 const piCli = join(dirname(piEntry), 'bundle', 'cli.js');
+const systemPrompt = fileURLToPath(new URL('../system-prompt.md', import.meta.url));
 try {
   // Replace this process: Pi keeps the terminal and signals; flock releases on exit.
   execve('/usr/bin/flock', ['flock', '--exclusive', '--nonblock', '--conflict-exit-code', '75',
     join(state, 'lock'), process.execPath, piCli,
-    '--session', join(state, 'session.jsonl'), '--session-dir', state, ...args], process.env);
+    '--session', join(state, 'session.jsonl'), '--session-dir', state,
+    '--system-prompt', systemPrompt, ...args], process.env);
 } catch (error) {
   fail(error.message);
 }

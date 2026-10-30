@@ -38,8 +38,8 @@ locus --mode json "Audit your events" # JSONL progress for another program
 - `.locus/session.jsonl`: Pi's native conversation, created when Pi persists it.
 - `.locus/lock`: OS lock file; safe to leave in place after exit. A second
   invocation fails with exit code 75 while the first is running.
-- `AGENTS.md`: Directory instructions; `init` supplies a short starter only if
-  the file does not already exist. Repeating `init` preserves existing files.
+- `init` creates only `.locus/`; it does not create an `AGENTS.md` file.
+- Existing `AGENTS.md` instructions are still discovered by Pi normally.
 - `.pi/settings.json`, `.pi/skills/`, `.pi/extensions/`, `.pi/mcp.json`: Pi's
   normal project configuration, discovered by Pi without a Locus translation.
 - `~/.pi/agent/`: Pi's shared credentials, settings, skills, and extensions.
@@ -66,6 +66,26 @@ of interrupted external actions. Add `.locus/` to each project's `.gitignore`
 if its transcripts should stay local.
 
 Read `bin/locus.js` for the entire implementation.
+
+## Edit the system prompt
+
+Edit `system-prompt.md` in this repository, then restart `locus`. Every directory
+uses this shared file, including when resuming an existing conversation. It is
+a snapshot of Pi 1.4.0's default identity, tool descriptions, guidelines, and
+documentation references, ready for you to customize. Documentation paths in
+the snapshot point to this installation of Pi.
+
+Locus passes the file to Pi's `--system-prompt` option, replacing the default
+coding-assistant prompt. Pi still appends discovered project instructions,
+skill descriptions, and the current working directory. Tool schemas remain
+supplied by Pi; the copied tool descriptions are a static snapshot of its four
+default tools. A caller can explicitly override the file with `--system-prompt`.
+
+There is no Locus-wide memory or `~/.locus` directory. Conversation history
+lives in each directory's `.locus/`. Pi's shared `~/.pi/agent/` directory holds
+configuration, credentials, model cache, and shared resources, not a Locus
+master memory. Previously generated `AGENTS.md` files are left in place;
+remove any starter you no longer want manually.
 
 The dependency override pins Pi's HTTP library to a patched version.
 
