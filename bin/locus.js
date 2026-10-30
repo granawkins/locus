@@ -8,10 +8,27 @@ import { fileURLToPath } from 'node:url';
 const args = process.argv.slice(2);
 const directory = process.cwd();
 const state = join(directory, '.locus');
+const settingsPath = join(state, 'settings.json');
 
 function fail(message) {
   console.error(`locus: ${message}`);
   process.exit(1);
+}
+
+function migrateSettings() {
+  const legacyPath = join(state, 'config.json');
+  if (existsSync(settingsPath) || !existsSync(legacyPath)) return;
+  try {
+    const settings = JSON.parse(readFileSync(legacyPath, 'utf8'));
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw Error('expected an object');
+    if ('systemPrompt' in settings) {
+      settings.customInstructions ??= settings.systemPrompt;
+      delete settings.systemPrompt;
+    }
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { flag: 'wx' });
+  } catch (error) {
+    fail(`could not migrate .locus/config.json: ${error.message}`);
+  }
 }
 
 if (args[0] === '--help' || args[0] === '-h') {
@@ -33,10 +50,10 @@ Requires Linux flock and Node.js 22.19 or newer.`);
 if (args[0] === 'init') {
   if (args.length !== 1) fail('usage: locus init');
   mkdirSync(state, { recursive: true });
-  const configPath = join(state, 'config.json');
-  if (!existsSync(configPath)) {
-    writeFileSync(configPath, JSON.stringify({
-      model: '', thinking: '', systemPrompt: '', tools: [], skills: [], preloadSkills: [],
+  migrateSettings();
+  if (!existsSync(settingsPath)) {
+    writeFileSync(settingsPath, JSON.stringify({
+      model: '', thinking: '', customInstructions: '', tools: [], skills: [], preloadSkills: [],
     }, null, 2) + '\n', { flag: 'wx' });
   }
   console.log('Initialized .locus/ (existing history preserved).\nRun locus to start chatting.');
@@ -61,17 +78,17 @@ function execute(command, argv) {
 if (args[0] === 'install') execute(process.execPath, [process.execPath, piCli, ...args]);
 
 if (!existsSync(state)) fail('run locus init in this directory first.');
+migrateSettings();
 
 // A small directory profile mapped to Pi options. Explicit CLI options win.
 const profileArgs = [];
 try {
-  const configPath = join(state, 'config.json');
-  const profile = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
+  const profile = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
   if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw Error('expected an object');
   for (const [key, value] of Object.entries(profile)) {
-    if (key === 'model' || key === 'thinking' || key === 'systemPrompt') {
+    if (key === 'model' || key === 'thinking' || key === 'customInstructions') {
       if (typeof value !== 'string') throw Error(`${key} must be a string`);
-      if (value.trim()) profileArgs.push(key === 'systemPrompt' ? '--system-prompt' : `--${key}`, value);
+      if (value.trim()) profileArgs.push(key === 'customInstructions' ? '--append-system-prompt' : `--${key}`, value);
     } else if (['tools', 'skills', 'preloadSkills'].includes(key)) {
       if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
         throw Error(`${key} must be an array of nonempty strings`);
@@ -90,7 +107,7 @@ try {
     } else throw Error(`unknown field: ${key}`);
   }
 } catch (error) {
-  fail(`invalid .locus/config.json: ${error.message}`);
+  fail(`invalid .locus/settings.json: ${error.message}`);
 }
 
 // Locus owns session selection; all other setup and behavior belong to Pi.

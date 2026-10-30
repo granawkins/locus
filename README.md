@@ -52,7 +52,7 @@ external programs of their own.
 - `.locus/session.jsonl`: Pi's native conversation, created when Pi persists it.
 - `.locus/lock`: OS lock file; safe to leave in place after exit. A second
   invocation fails with exit code 75 while the first is running.
-- `.locus/config.json`: Directory profile, created by `init` if missing.
+- `.locus/settings.json`: Directory profile, created by `init` if missing.
 - `init` does not create an `AGENTS.md` file.
 - Existing `AGENTS.md` instructions are still discovered by Pi normally.
 - `.pi/settings.json`, `.pi/skills/`, `.pi/extensions/`, `.pi/mcp.json`: Pi's
@@ -86,13 +86,13 @@ Read `bin/locus.js` for the entire implementation.
 
 ## Directory profile
 
-Edit `.locus/config.json` to select Pi options for this directory:
+Edit `.locus/settings.json` to select Pi options for this directory:
 
 ```json
 {
   "model": "openai/gpt-6.1-sol",
   "thinking": "high",
-  "systemPrompt": "",
+  "customInstructions": "",
   "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
   "skills": ["../shared/skills"],
   "preloadSkills": ["../shared/skills/venue-audit/SKILL.md"]
@@ -105,7 +105,7 @@ Every field is optional. `init` shows all supported fields, initially empty:
 {
   "model": "",
   "thinking": "",
-  "systemPrompt": "",
+  "customInstructions": "",
   "tools": [],
   "skills": [],
   "preloadSkills": []
@@ -119,11 +119,15 @@ To disable all tools explicitly, use Pi's `--no-tools` CLI option.
 Paths resolve from the working directory,
 not from `.locus/`; absolute paths and `~/` also work.
 
-`systemPrompt` accepts prompt text or a path to a text file, using Pi's normal
-`--system-prompt` behavior. A nonblank value replaces the shared Locus prompt
-for this directory; an empty string keeps `system-prompt.md` from the Locus
-package. Existing project instructions and skill discovery still apply.
-An explicit CLI `--system-prompt` takes precedence over the profile.
+`customInstructions` accepts instruction text or a path to a text file, using
+Pi's `--append-system-prompt` behavior. It adds directory-specific guidance
+while preserving the shared Locus system prompt, project instructions, and
+skill discovery. An empty string adds nothing.
+
+Old `.locus/config.json` profiles are copied into `settings.json` automatically
+on the next launch or `init`, if no settings file exists. Their `systemPrompt`
+field becomes additive `customInstructions`. The original config file is kept
+as a backup and is no longer read once `settings.json` exists.
 
 `skills` adds files or directories to Pi's skill discovery (descriptions first,
 full instructions on demand). `preloadSkills` takes individual skill file paths:
