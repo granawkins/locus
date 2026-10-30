@@ -35,7 +35,9 @@ if (args[0] === 'init') {
   mkdirSync(state, { recursive: true });
   const configPath = join(state, 'config.json');
   if (!existsSync(configPath)) {
-    writeFileSync(configPath, '{\n  "skills": [],\n  "preloadSkills": []\n}\n', { flag: 'wx' });
+    writeFileSync(configPath, JSON.stringify({
+      model: '', thinking: '', tools: [], skills: [], preloadSkills: [],
+    }, null, 2) + '\n', { flag: 'wx' });
   }
   console.log('Initialized .locus/ (existing history preserved).\nRun locus to start chatting.');
   process.exit(0);
@@ -68,13 +70,15 @@ try {
   if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw Error('expected an object');
   for (const [key, value] of Object.entries(profile)) {
     if (key === 'model' || key === 'thinking') {
-      if (typeof value !== 'string' || !value.trim()) throw Error(`${key} must be a nonempty string`);
-      profileArgs.push(`--${key}`, value);
+      if (typeof value !== 'string') throw Error(`${key} must be a string`);
+      if (value.trim()) profileArgs.push(`--${key}`, value);
     } else if (['tools', 'skills', 'preloadSkills'].includes(key)) {
       if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
         throw Error(`${key} must be an array of nonempty strings`);
       }
-      if (key === 'tools') profileArgs.push('--tools', value.join(','));
+      if (key === 'tools') {
+        if (value.length) profileArgs.push('--tools', value.join(','));
+      }
       else for (const path of value) {
         const skillPath = resolve(directory, path.startsWith('~/') ? join(homedir(), path.slice(2)) : path);
         profileArgs.push('--skill', skillPath);

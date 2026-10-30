@@ -98,8 +98,23 @@ Edit `.locus/config.json` to select Pi options for this directory:
 }
 ```
 
-Every field is optional. `init` starts with empty skill lists, leaving Pi's
-model and tool defaults unchanged. Paths resolve from the working directory,
+Every field is optional. `init` shows all supported fields, initially empty:
+
+```json
+{
+  "model": "",
+  "thinking": "",
+  "tools": [],
+  "skills": [],
+  "preloadSkills": []
+}
+```
+
+Blank strings and empty arrays add no overrides, leaving shared Pi settings
+in `~/.locus/agent/` and normal project settings in effect. An existing session
+can also restore its saved model and thinking level when no override is given.
+To disable all tools explicitly, use Pi's `--no-tools` CLI option.
+Paths resolve from the working directory,
 not from `.locus/`; absolute paths and `~/` also work.
 
 `skills` adds files or directories to Pi's skill discovery (descriptions first,
