@@ -2,9 +2,10 @@
 
 **The patron saint of a directory.**
 
-Locus gives each item in a catalog its own persistent agent. Keep every venue,
-book, customer, or other item in a directory, and let its agent read, update,
-and steward it over time. People and other agents use the same lightweight CLI.
+One directory, one persistent agent, one cumulative conversation. Interactive
+chats and headless commands continue the same history, with messages and
+working artifacts kept in the directory. Locus stewards that work over time,
+using Pi's built-in compaction while retaining JSONL history it can inspect.
 
 Built on [Pi](https://pi.dev), Locus supports Pi's conversation CLI modes,
 tools, skills, and [community extensions](https://pi.dev/packages). It inherits
@@ -12,25 +13,21 @@ tools, skills, and [community extensions](https://pi.dev/packages). It inherits
 skills from `.agents/skills/` up to the repository root, following Pi's project
 trust rules. Shared skills and native `.pi/` configuration work normally.
 
-Each directory has one canonical conversation. Interactive chats and headless
-commands all add to that history. Messages and working artifacts stay with the
-catalog item, rather than in a separate conversation service. Pi's built-in
-compaction keeps the active context manageable; the original JSONL history
-remains available for the agent to inspect.
-
 ## Install
 
 ```sh
 npm install -g @granawkins/locus
 ```
 
-Requires Linux, Node.js 22.19+, and `/usr/bin/flock` (from `util-linux`). Pi is
-included as a dependency. On first use, run `locus` and use `/login` and `/model`
-to connect a provider and select a model.
+Requires Node.js 22.19+ on Linux, macOS, or Windows. Pi is included as a
+dependency. On first use, run `locus` and use `/login` and `/model`
+to connect a provider and select a model. On Windows, install Git for Windows
+for Pi's default Bash tool, or select its PowerShell tool; see
+[Pi on Windows](https://pi.dev/docs/latest/windows).
 
 ## Commands
 
-Run Locus from the catalog item's directory. It initializes automatically.
+Run Locus from the directory you want it to steward. It initializes automatically.
 
 ```sh
 locus                              # Interactive conversation
@@ -43,8 +40,7 @@ locus install npm:pi-web-access     # Install a shared community package
 locus install -l npm:some-package   # Install for the current Pi project
 ```
 
-`locus init` optionally creates settings without opening a conversation. Use
-`/reload` in an open chat after changing Pi resources or installing a package.
+Use `/reload` in an open chat after changing Pi resources or installing a package.
 Project skills and extensions require Pi's project trust; unattended runs can
 use already-saved trust or an explicit `--approve` decision.
 
@@ -56,9 +52,10 @@ The first run creates `.locus/` in the current directory:
 |---|---|
 | `settings.json` | This directory's settings. |
 | `session.jsonl` | Cumulative messages, tool results, and compaction records. |
-| `lock` | One active Locus process per directory; a competing run exits with code 75. |
+| `lock` | Lock target; the active lock is maintained in `lock.lock/`. A competing run exits with code 75. |
 
-The agent can keep notes and other working files in `.locus/`. Shared credentials,
+Locks release on normal exit. After a forced termination, a stale lock becomes
+recoverable after two minutes. The agent can keep notes and other working files in `.locus/`. Shared credentials,
 settings, skills, and installed packages live in `~/.locus/agent/`; override that
 location with `LOCUS_AGENT_DIR`. There is no shared master conversation.
 
@@ -83,7 +80,7 @@ editing this file. `system-prompt.md` in the package defines the shared identity
 
 ## Use from another agent
 
-Run `locus -p "task"` with the item's directory as the working directory and
+Run `locus -p "task"` with the target directory as the working directory and
 capture its answer and exit status. Invoke it again to continue. The included
 [skill](skills/locus/SKILL.md) is a concise operating guide; copy its directory
 into your harness's skills location to make it discoverable.

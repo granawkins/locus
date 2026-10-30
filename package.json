@@ -1,7 +1,7 @@
 {
   "name": "@granawkins/locus",
   "version": "0.1.0",
-  "description": "The patron saint of a directory: one persistent Pi agent per catalog item.",
+  "description": "The patron saint of a directory: one persistent Pi conversation and its working files.",
   "license": "MIT",
   "author": "granawkins",
   "repository": {
@@ -16,11 +16,14 @@
   "type": "module",
   "bin": { "locus": "bin/locus.js" },
   "engines": { "node": ">=22.19.0" },
-  "os": ["linux"],
+  "os": ["linux", "darwin", "win32"],
   "scripts": {
     "test": "node --test",
     "prepack": "npm test"
   },
-  "dependencies": { "@earendil-works/pi-coding-agent": "1.4.0" },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "proper-lockfile": "4.1.2"
+  },
   "overrides": { "undici": "8.12.3" }
 }

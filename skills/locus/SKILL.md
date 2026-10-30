@@ -1,13 +1,13 @@
 ---
 name: locus
-description: Delegate recurring catalog-item work to a persistent directory agent through Locus, or continue work owned by an existing Locus agent.
+description: Delegate recurring directory-owned work to a persistent directory agent through Locus, or continue work owned by an existing Locus agent.
 license: MIT
 ---
 
 # Locus
 
-The patron saint of a directory: one persistent agent stewards one catalog
-item. Run commands in that item's directory. Every invocation continues
+The patron saint of a directory: one persistent agent stewards its
+work. Run commands in the target directory. Every invocation continues
 `.locus/session.jsonl`; Pi compacts context while retaining inspectable history.
 
 ```sh
@@ -22,7 +22,8 @@ Specify the goal, authorized changes, verification, and result destination.
 Database integrations and completion evidence are project-specific.
 
 - Bound concurrency in the caller. One process per directory is allowed;
-  competing runs exit 75. There is no global queue.
+  competing runs exit 75. Forced termination can leave a lock stale for two
+  minutes. There is no global queue.
 - `.locus/settings.json` controls model, thinking, tools, extra skill paths,
   preloaded skill file paths, and additive instructions. Empty values inherit
   defaults. Restart after edits; never edit Pi's session files.

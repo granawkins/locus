@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, utimesSync } from 'node:fs';
+import lockfile from 'proper-lockfile';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,14 +100,18 @@ test('real Pi persists history, loads skills and additive instructions, and resp
   assert.equal(after[0].id, before[0].id);
   assert.ok(after.length > before.length);
 
-  const holder = spawn('/usr/bin/flock', ['--exclusive', '--no-fork', join(directory, '.locus/lock'), process.execPath,
-    '-e', 'process.stdout.write("ready");setInterval(()=>{},1000)'], { stdio: ['ignore', 'pipe', 'ignore'] });
-  t.after(() => holder.kill());
-  await once(holder.stdout, 'data');
-  assert.equal((await run([...flags, '-p', 'must not run'], directory, env)).code, 75);
-  const stopped = once(holder, 'close');
-  holder.kill();
-  await stopped;
+  const target = join(directory, '.locus/lock');
+  const release = await lockfile.lock(target, { stale: 120000, update: 10000 });
+  try {
+    assert.equal((await run([...flags, '-p', 'must not run'], directory, env)).code, 75);
+  } finally {
+    await release();
+  }
   assert.equal((await run(['--session', 'other.jsonl'], directory, env)).code, 1);
   assert.equal(requests.length, 2);
+  mkdirSync(`${target}.lock`);
+  const stale = new Date(Date.now() - 180000);
+  utimesSync(`${target}.lock`, stale, stale);
+  assert.equal((await run([...flags, '-p', 'recover a stale lock'], directory, env)).code, 0);
+  assert.equal(existsSync(`${target}.lock`), false);
 });

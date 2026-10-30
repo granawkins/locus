@@ -2,7 +2,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { execve } from 'node:process';
+import { spawn } from 'node:child_process';
+import lockfile from 'proper-lockfile';
 import { fileURLToPath } from 'node:url';
 
 const template = new URL('../settings.template.json', import.meta.url);
@@ -70,23 +71,47 @@ export function profileArguments(directory) {
 }
 
 
-export function launchPi(args, { directory, profileArgs = [], conversation = false } = {}) {
+export async function launchPi(args, { directory, profileArgs = [], conversation = false } = {}) {
   const entry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));
   const cli = join(dirname(entry), 'bundle', 'cli.js');
   const env = {
     ...process.env,
     PI_CODING_AGENT_DIR: process.env.LOCUS_AGENT_DIR || join(homedir(), '.locus', 'agent'),
   };
-  if (!conversation) return execve(process.execPath, [process.execPath, cli, ...args], env);
-
-  const state = join(directory, '.locus');
-  const prompt = fileURLToPath(new URL('../system-prompt.md', import.meta.url));
-  const docs = `Installed Pi package: ${dirname(dirname(entry))}\nLocus package: ${fileURLToPath(new URL('../', import.meta.url))}`;
-  // Replacing this process preserves terminal control and signals. The OS releases the lock on exit.
-  return execve('/usr/bin/flock', ['flock', '--exclusive', '--nonblock', '--conflict-exit-code', '75',
-    join(state, 'lock'), process.execPath, cli,
-    '--session', join(state, 'session.jsonl'), '--session-dir', state,
-    '--system-prompt', prompt, '--append-system-prompt', docs, ...profileArgs, ...args], env);
+  let release = async () => {};
+  if (conversation) {
+    const state = join(directory, '.locus');
+    const target = join(state, 'lock');
+    writeFileSync(target, '', { flag: 'a' });
+    try {
+      release = await lockfile.lock(target, { stale: 120000, update: 10000, retries: 0 });
+    } catch (error) {
+      if (error.code !== 'ELOCKED') throw error;
+      console.error('locus: another process is using this directory.');
+      process.exitCode = 75;
+      return;
+    }
+    const prompt = fileURLToPath(new URL('../system-prompt.md', import.meta.url));
+    const docs = `Installed Pi package: ${dirname(dirname(entry))}\nLocus package: ${fileURLToPath(new URL('../', import.meta.url))}`;
+    args = ['--session', join(state, 'session.jsonl'), '--session-dir', state,
+      '--system-prompt', prompt, '--append-system-prompt', docs, ...profileArgs, ...args];
+  }
+  const handlers = new Map();
+  try {
+    const child = spawn(process.execPath, [cli, ...args], { stdio: 'inherit', env });
+    for (const signal of process.platform === 'win32' ? ['SIGINT', 'SIGTERM'] : ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+      const handler = () => child.kill(signal);
+      handlers.set(signal, handler);
+      process.on(signal, handler);
+    }
+    process.exitCode = await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => resolve(code ?? (signal === 'SIGINT' ? 130 : 143)));
+    });
+  } finally {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+    await release();
+  }
 }
 
 
@@ -104,9 +129,9 @@ Other arguments pass through to Pi. Use /login, /model, /settings, and
 /reload inside chat. Skills and extensions use Pi's normal discovery.
 Conversation commands initialize the current directory automatically.
 Profile: .locus/settings.json | History: .locus/session.jsonl
-Requires Linux flock and Node.js 22.19 or newer.`;
+Requires Node.js 22.19 or newer on Linux, macOS, or Windows.`;
 
-export function main(args = process.argv.slice(2), directory = process.cwd()) {
+export async function main(args = process.argv.slice(2), directory = process.cwd()) {
   if (args[0] === '--help' || args[0] === '-h') return console.log(help);
   if (args[0] === '--version' || args[0] === '-v') return console.log(metadata.version);
   if (args[0] === 'init') {
@@ -130,7 +155,7 @@ export function main(args = process.argv.slice(2), directory = process.cwd()) {
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    main();
+    await main();
   } catch (error) {
     console.error(`locus: ${error.message}`);
     process.exitCode = 1;
