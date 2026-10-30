@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { execve } from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +33,10 @@ Requires Linux flock and Node.js 22.19 or newer.`);
 if (args[0] === 'init') {
   if (args.length !== 1) fail('usage: locus init');
   mkdirSync(state, { recursive: true });
+  const configPath = join(state, 'config.json');
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, '{\n  "skills": [],\n  "preloadSkills": []\n}\n', { flag: 'wx' });
+  }
   console.log('Initialized .locus/ (existing history preserved).\nRun locus to start chatting.');
   process.exit(0);
 }
@@ -56,6 +60,35 @@ if (args[0] === 'install') execute(process.execPath, [process.execPath, piCli, .
 
 if (!existsSync(state)) fail('run locus init in this directory first.');
 
+// A small directory profile mapped to Pi options. Explicit CLI options win.
+const profileArgs = [];
+try {
+  const configPath = join(state, 'config.json');
+  const profile = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw Error('expected an object');
+  for (const [key, value] of Object.entries(profile)) {
+    if (key === 'model' || key === 'thinking') {
+      if (typeof value !== 'string' || !value.trim()) throw Error(`${key} must be a nonempty string`);
+      profileArgs.push(`--${key}`, value);
+    } else if (['tools', 'skills', 'preloadSkills'].includes(key)) {
+      if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
+        throw Error(`${key} must be an array of nonempty strings`);
+      }
+      if (key === 'tools') profileArgs.push('--tools', value.join(','));
+      else for (const path of value) {
+        const skillPath = resolve(directory, path.startsWith('~/') ? join(homedir(), path.slice(2)) : path);
+        profileArgs.push('--skill', skillPath);
+        if (key === 'preloadSkills') {
+          const file = readFileSync(skillPath, 'utf8');
+          profileArgs.push('--append-system-prompt', `Preloaded skill: ${skillPath}\nResolve its relative references from ${dirname(skillPath)}.\n\n${file}`);
+        }
+      }
+    } else throw Error(`unknown field: ${key}`);
+  }
+} catch (error) {
+  fail(`invalid .locus/config.json: ${error.message}`);
+}
+
 // Locus owns session selection; all other setup and behavior belong to Pi.
 const sessionOptions = ['--session', '--session-dir', '--session-id', '--no-session',
   '--continue', '-c', '--resume', '-r', '--fork'];
@@ -69,4 +102,4 @@ for (const arg of args.slice(0, args.indexOf('--') < 0 ? args.length : args.inde
 execute('/usr/bin/flock', ['flock', '--exclusive', '--nonblock', '--conflict-exit-code', '75',
     join(state, 'lock'), process.execPath, piCli,
     '--session', join(state, 'session.jsonl'), '--session-dir', state,
-    '--system-prompt', systemPrompt, ...args]);
+    '--system-prompt', systemPrompt, ...profileArgs, ...args]);

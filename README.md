@@ -52,7 +52,8 @@ external programs of their own.
 - `.locus/session.jsonl`: Pi's native conversation, created when Pi persists it.
 - `.locus/lock`: OS lock file; safe to leave in place after exit. A second
   invocation fails with exit code 75 while the first is running.
-- `init` creates only `.locus/`; it does not create an `AGENTS.md` file.
+- `.locus/config.json`: Directory profile, created by `init` if missing.
+- `init` does not create an `AGENTS.md` file.
 - Existing `AGENTS.md` instructions are still discovered by Pi normally.
 - `.pi/settings.json`, `.pi/skills/`, `.pi/extensions/`, `.pi/mcp.json`: Pi's
   normal project configuration, discovered by Pi without a Locus translation.
@@ -82,6 +83,37 @@ of interrupted external actions. Add `.locus/` to each project's `.gitignore`
 if its transcripts should stay local.
 
 Read `bin/locus.js` for the entire implementation.
+
+## Directory profile
+
+Edit `.locus/config.json` to select Pi options for this directory:
+
+```json
+{
+  "model": "openai/gpt-6.1-sol",
+  "thinking": "high",
+  "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+  "skills": ["../shared/skills"],
+  "preloadSkills": ["../shared/skills/venue-audit/SKILL.md"]
+}
+```
+
+Every field is optional. `init` starts with empty skill lists, leaving Pi's
+model and tool defaults unchanged. Paths resolve from the working directory,
+not from `.locus/`; absolute paths and `~/` also work.
+
+`skills` adds files or directories to Pi's skill discovery (descriptions first,
+full instructions on demand). `preloadSkills` takes individual skill file paths:
+it advertises those skills and appends their full text to the system prompt on
+every launch. Preloading does not execute a task or script.
+
+`model` and `thinking` select the startup values even when resuming history.
+`tools` uses Pi's tool-selection semantics; plain names replace the default set,
+while entries such as `+grep` add to it. Explicit CLI model, thinking, and tool
+options override the profile; extra skill and appended-prompt options accumulate.
+Restart `locus` after editing this profile; Pi's `/reload` reloads native resources,
+but does not rerun the Locus wrapper. Existing directories without a profile
+continue to work; rerun `locus init` to create one without replacing history.
 
 ## Edit the system prompt
 
