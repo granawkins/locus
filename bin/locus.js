@@ -36,7 +36,7 @@ if (args[0] === 'init') {
   const configPath = join(state, 'config.json');
   if (!existsSync(configPath)) {
     writeFileSync(configPath, JSON.stringify({
-      model: '', thinking: '', tools: [], skills: [], preloadSkills: [],
+      model: '', thinking: '', systemPrompt: '', tools: [], skills: [], preloadSkills: [],
     }, null, 2) + '\n', { flag: 'wx' });
   }
   console.log('Initialized .locus/ (existing history preserved).\nRun locus to start chatting.');
@@ -69,9 +69,9 @@ try {
   const profile = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
   if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw Error('expected an object');
   for (const [key, value] of Object.entries(profile)) {
-    if (key === 'model' || key === 'thinking') {
+    if (key === 'model' || key === 'thinking' || key === 'systemPrompt') {
       if (typeof value !== 'string') throw Error(`${key} must be a string`);
-      if (value.trim()) profileArgs.push(`--${key}`, value);
+      if (value.trim()) profileArgs.push(key === 'systemPrompt' ? '--system-prompt' : `--${key}`, value);
     } else if (['tools', 'skills', 'preloadSkills'].includes(key)) {
       if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
         throw Error(`${key} must be an array of nonempty strings`);

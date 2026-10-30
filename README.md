@@ -92,6 +92,7 @@ Edit `.locus/config.json` to select Pi options for this directory:
 {
   "model": "openai/gpt-6.1-sol",
   "thinking": "high",
+  "systemPrompt": "",
   "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
   "skills": ["../shared/skills"],
   "preloadSkills": ["../shared/skills/venue-audit/SKILL.md"]
@@ -104,6 +105,7 @@ Every field is optional. `init` shows all supported fields, initially empty:
 {
   "model": "",
   "thinking": "",
+  "systemPrompt": "",
   "tools": [],
   "skills": [],
   "preloadSkills": []
@@ -116,6 +118,12 @@ can also restore its saved model and thinking level when no override is given.
 To disable all tools explicitly, use Pi's `--no-tools` CLI option.
 Paths resolve from the working directory,
 not from `.locus/`; absolute paths and `~/` also work.
+
+`systemPrompt` accepts prompt text or a path to a text file, using Pi's normal
+`--system-prompt` behavior. A nonblank value replaces the shared Locus prompt
+for this directory; an empty string keeps `system-prompt.md` from the Locus
+package. Existing project instructions and skill discovery still apply.
+An explicit CLI `--system-prompt` takes precedence over the profile.
 
 `skills` adds files or directories to Pi's skill discovery (descriptions first,
 full instructions on demand). `preloadSkills` takes individual skill file paths:
