@@ -1,11 +1,26 @@
 {
-  "name": "locus-local",
+  "name": "@granawkins/locus",
   "version": "0.1.0",
-  "private": true,
-  "description": "A persistent Pi conversation in each directory.",
+  "description": "Persistent, directory-bound agents powered by Pi, for people and other agents.",
+  "license": "MIT",
+  "author": "granawkins",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/granawkins/locus.git"
+  },
+  "homepage": "https://github.com/granawkins/locus#readme",
+  "bugs": { "url": "https://github.com/granawkins/locus/issues" },
+  "keywords": ["agent", "cli", "pi", "persistent", "agent-skills"],
+  "files": ["bin/", "src/", "templates/", "skills/", "system-prompt.md"],
+  "publishConfig": { "access": "public" },
   "type": "module",
   "bin": { "locus": "bin/locus.js" },
   "engines": { "node": ">=22.19.0" },
+  "os": ["linux"],
+  "scripts": {
+    "test": "node --test",
+    "prepack": "npm test"
+  },
   "dependencies": { "@earendil-works/pi-coding-agent": "1.4.0" },
   "overrides": { "undici": "8.12.3" }
 }

@@ -1,105 +1,80 @@
 # Locus
 
-One persistent Pi conversation per directory. A small CLI wrapper, with no
-build step and one pinned dependency. Requires Linux (`/usr/bin/flock`) and
-Node.js 22.19 or newer.
+**One persistent agent per directory, powered by [Pi](https://pi.dev).**
+
+Give a venue, a book, or any other unit of work its own agent. Ask it to do a
+task, let it exit, and come back later: the next invocation resumes the same
+conversation. Locus is designed for both people and agents delegating work
+through a terminal.
 
 ## Install
 
 ```sh
-cd ~/Locus
-npm install
-mkdir -p ~/.local/bin
-ln -s ~/Locus/bin/locus.js ~/.local/bin/locus
+npm install -g @granawkins/locus
 ```
 
-Ensure `~/.local/bin` is on your PATH. The link runs this checkout directly.
+Requires **Linux**, **Node.js 22.19 or newer**, and `flock` at `/usr/bin/flock`
+(usually provided by `util-linux`). Pi is installed as a dependency; you do
+not need a separate Pi installation. macOS and Windows are not supported yet.
 
-## Use
+## Start a directory agent
 
 ```sh
-cd /path/to/a/venue
+cd /path/to/venue
 locus init
 locus
 ```
 
-In Pi's terminal chat, use `/login` to connect a provider (choose OpenAI and
-Sign in with ChatGPT), `/model` to select a model, and `/settings` for settings.
-Exit normally, run `locus` again, and the same conversation resumes.
+Use `/login` to connect a model provider and `/model` to choose a model.
+For OpenAI subscription access, choose **Sign in with ChatGPT** in the OpenAI
+login flow. Authentication and model availability are handled by Pi.
+
+`locus init` creates `.locus/settings.json` with all fields empty. It preserves
+existing settings and history and does not create `AGENTS.md`. The first
+persisted conversation is saved to `.locus/session.jsonl`.
 
 ```sh
-locus "Audit your events"           # Interactive chat with an initial task
-locus -p "Audit your events"        # One task, then exit
-locus --mode json "Audit your events" # JSONL progress for another program
+locus "Audit your events"             # Chat with an initial task
+locus -p "Audit your events"          # Finish the task, print the answer, exit
+locus -p "Here is the answer to your question. Continue."
+locus --help
 ```
 
-## What lives where
+Run every command from the directory whose agent you intend to address.
+Locus does not search parent directories for another agent's `.locus/`.
 
-Install community packages using Pi's normal sources and options:
+## Delegate from another agent
+
+Invoke `locus -p` with the target directory as the working directory and
+capture stdout, stderr, and the exit status. The command waits until the run
+finishes. Return later with another prompt to continue that same conversation.
+
+Give the agent its goal, relevant inputs, allowed actions, verification
+criteria, and the expected result location. For example, a venue audit could
+save a report and update a project-specific audit record only after checks
+pass. Locus does not supply a database integration or enforce a result schema.
+
+Use a bounded worker pool for many directories. Each directory permits one
+Locus invocation at a time; a conflicting invocation exits with code **75**.
+There is no global concurrency limit or job queue. Use your host's background
+job support for tasks that exceed its command timeout, and record failures so
+an interrupted audit is not left permanently marked as processing.
+
+The included [Locus skill](skills/locus/SKILL.md) gives other agents a fuller
+operating guide. To make it discoverable by agents that support Agent Skills,
+copy it from your global npm installation into a skills directory:
 
 ```sh
-locus install npm:pi-web-access
-locus install /path/to/local-package
+mkdir -p ~/.agents/skills
+cp -R "$(npm root -g)/@granawkins/locus/skills/locus" ~/.agents/skills/
 ```
 
-This passes directly to Pi's installer using `~/.locus/agent/` (or
-`LOCUS_AGENT_DIR`). It works outside initialized directories and does not
-open a conversation. Restart Locus to load installed resources. Pi's `--local`
-option instead registers the package in the current project's `.pi/settings.json`.
-Packages must support the installed Pi version and may need credentials or
-external programs of their own.
+Use the skill directory your harness supports if it does not scan
+`~/.agents/skills/`. The skill can also be read directly from this repository.
 
-- `.locus/session.jsonl`: Pi's native conversation, created when Pi persists it.
-- `.locus/lock`: OS lock file; safe to leave in place after exit. A second
-  invocation fails with exit code 75 while the first is running.
-- `.locus/settings.json`: Directory profile, created by `init` if missing.
-- `init` does not create an `AGENTS.md` file.
-- Existing `AGENTS.md` instructions are still discovered by Pi normally.
-- `.pi/settings.json`, `.pi/skills/`, `.pi/extensions/`, `.pi/mcp.json`: Pi's
-  normal project configuration, discovered by Pi without a Locus translation.
-- `~/.locus/agent/`: Shared credentials, settings, model cache, skills, and extensions.
-  Locus sets Pi's `PI_CODING_AGENT_DIR` override to this location. Set
-  `LOCUS_AGENT_DIR` to use another location.
+## Directory settings
 
-Locus only uses the exact current directory; it does not search for a parent
-agent. It forwards arguments to the installed Pi CLI, fixing the session path
-and storage directory. Pi supplies the terminal, tools, resource discovery,
-authentication, streaming, and compaction. The lower-level Pi packages arrive
-as dependencies of `pi-coding-agent`; Locus does not import them directly.
-
-Pi may ask you to trust project resources on first interactive use. Automated
-runs skip protected project resources unless trust is saved or you pass
-Pi's `--approve` option for that invocation.
-
-Pi's native `/new`, branch, and session commands remain available. They can
-switch away from the canonical conversation during that invocation; starting
-`locus` again always opens `.locus/session.jsonl`. Avoid those commands when
-you want one continuous history.
-
-The lock covers Locus invocations, not someone opening the same file directly
-with Pi. Working directory and instructions do not restrict filesystem access.
-This prototype adds no scheduler, portal, custom memory, or automatic recovery
-of interrupted external actions. Add `.locus/` to each project's `.gitignore`
-if its transcripts should stay local.
-
-Read `bin/locus.js` for the entire implementation.
-
-## Directory profile
-
-Edit `.locus/settings.json` to select Pi options for this directory:
-
-```json
-{
-  "model": "openai/gpt-6.1-sol",
-  "thinking": "high",
-  "customInstructions": "",
-  "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
-  "skills": ["../shared/skills"],
-  "preloadSkills": ["../shared/skills/venue-audit/SKILL.md"]
-}
-```
-
-Every field is optional. `init` shows all supported fields, initially empty:
+Edit `.locus/settings.json`:
 
 ```json
 {
@@ -112,58 +87,120 @@ Every field is optional. `init` shows all supported fields, initially empty:
 }
 ```
 
-Blank strings and empty arrays add no overrides, leaving shared Pi settings
-in `~/.locus/agent/` and normal project settings in effect. An existing session
-can also restore its saved model and thinking level when no override is given.
-To disable all tools explicitly, use Pi's `--no-tools` CLI option.
-Paths resolve from the working directory,
-not from `.locus/`; absolute paths and `~/` also work.
+| Field | Meaning |
+|---|---|
+| `model` | Pi model reference, such as `provider/model-id`. |
+| `thinking` | Pi reasoning level, such as `medium` or `high`. |
+| `customInstructions` | Text or an existing file path appended to the shared Locus prompt. |
+| `tools` | Pi tool selection. Plain names replace the default set; `+grep` adds to it. |
+| `skills` | Additional skill file or directory paths, advertised for on-demand use. |
+| `preloadSkills` | Individual skill file paths whose entire contents are added to context. |
 
-`customInstructions` accepts instruction text or a path to a text file, using
-Pi's `--append-system-prompt` behavior. It adds directory-specific guidance
-while preserving the shared Locus system prompt, project instructions, and
-skill discovery. An empty string adds nothing.
+Empty values add no overrides. Normal shared and project Pi settings still
+apply; a resumed session can restore its saved model and thinking level.
+Explicit command-line model, thinking, and tool options take precedence over
+the directory settings. Skill paths and appended instructions accumulate.
 
-Old `.locus/config.json` profiles are copied into `settings.json` automatically
-on the next launch or `init`, if no settings file exists. Their `systemPrompt`
-field becomes additive `customInstructions`. The original config file is kept
-as a backup and is no longer read once `settings.json` exists.
+Paths resolve from the working directory, not `.locus/`. The two skill lists
+also accept absolute paths and `~/`. They take **paths, not skill names**.
+An empty tool list inherits defaults; use `--no-tools` to disable all tools.
 
-`skills` adds files or directories to Pi's skill discovery (descriptions first,
-full instructions on demand). `preloadSkills` takes individual skill file paths:
-it advertises those skills and appends their full text to the system prompt on
-every launch. Preloading does not execute a task or script.
+Restart Locus after changing its directory settings. Use `/reload` for changes
+to Pi's native skills, extensions, instructions, and other resources while
+chatting. Old `.locus/config.json` profiles migrate on the next launch or
+`init` if no settings file exists. The old file is retained as a backup and
+its `systemPrompt` field becomes additive `customInstructions`.
 
-`model` and `thinking` select the startup values even when resuming history.
-`tools` uses Pi's tool-selection semantics; plain names replace the default set,
-while entries such as `+grep` add to it. Explicit CLI model, thinking, and tool
-options override the profile; extra skill and appended-prompt options accumulate.
-Restart `locus` after editing this profile; Pi's `/reload` reloads native resources,
-but does not rerun the Locus wrapper. Existing directories without a profile
-continue to work; rerun `locus init` to create one without replacing history.
+## Skills, tools, and extensions
 
-## Edit the system prompt
+Locus preserves Pi's tools and resource discovery. Default tools are `read`,
+`bash`, `edit`, and `write`. Existing `AGENTS.md` instructions and discovered
+skills remain available; Locus does not generate directory instructions.
 
-Edit `system-prompt.md` in this repository, then restart `locus`. Every directory
-uses this shared file, including when resuming an existing conversation. It is
-the identity and behavior of Locus, a persistent directory agent, together with
-Pi documentation references. Documentation paths point to this installation
-of Pi.
+```sh
+locus install npm:pi-web-access
+locus install /path/to/local-package
+locus install -l npm:some-package
+```
 
-Locus passes the file to Pi's `--system-prompt` option, replacing the default
-coding-assistant prompt. Pi still appends discovered project instructions,
-skill descriptions, and the current working directory. Tool schemas remain
-supplied by Pi. A caller can explicitly override the file with `--system-prompt`.
+Installation is shared across your Locus agents by default. `-l` uses Pi's
+project-local `.pi/settings.json`. These commands work without `locus init`.
+A new Locus process loads installed resources; an open chat can use `/reload`.
+Packages must support the installed Pi version and may need their own API
+keys, browsers, or other programs.
 
-There is no Locus-wide memory. Conversation history lives in each directory's
-`.locus/`. The shared `~/.locus/agent/` directory holds configuration,
-credentials, model cache, and shared resources, not a master memory.
-Previously generated `AGENTS.md` files are left in place;
-remove any starter you no longer want manually.
+Project resources require Pi's project trust. Interactive Pi may ask for a
+trust decision. Unattended runs skip protected project resources unless trust
+is already saved or you explicitly pass `--approve` for that invocation.
 
-The dependency override pins Pi's HTTP library to a patched version.
+See Pi's [skills](https://pi.dev/docs/latest/skills),
+[configuration](https://pi.dev/docs/latest/configuration), and
+[package catalog](https://pi.dev/packages) for discovery and setup details.
 
-Upstream: [Pi](https://github.com/earendil-works/pi),
-[CLI](https://pi.dev/docs/latest/cli),
-[configuration](https://pi.dev/docs/latest/configuration),
-[skills](https://pi.dev/docs/latest/skills).
+## State and identity
+
+| Location | Purpose |
+|---|---|
+| `.locus/settings.json` | This directory's Locus settings. |
+| `.locus/session.jsonl` | Pi-managed conversation and tool history. |
+| `.locus/lock` | OS lock; remains on disk but releases automatically on exit. |
+| `.locus/notes/`, `.locus/work/` | Optional working files maintained by the agent. |
+| `~/.locus/agent/` | Shared Pi credentials, settings, model cache, skills, and packages. |
+| `.pi/` | Pi's native project configuration and resources. |
+
+Set `LOCUS_AGENT_DIR` to use a different shared directory. There is no master
+conversation shared across directories. Full historical retention does not
+mean perfect active recall after compaction; the agent can search its saved
+history. Do not edit Pi's session files manually.
+
+The bundled `system-prompt.md` supplies the Locus identity. Directory custom
+instructions add to it. Pi's native `/new`, branching, and session-switching
+commands remain available, but can switch away from the canonical conversation
+within that invocation. The next `locus` launch returns to `session.jsonl`.
+
+Pi tools run with the permissions of the invoking account; the directory is
+an organizational boundary, not a sandbox. Locus does not automatically resume
+interrupted external actions. Add `.locus/` to your project's `.gitignore` if
+its transcripts and working files should stay local.
+
+## Structured integrations
+
+```sh
+locus --mode json "Audit your events"
+locus --mode rpc
+```
+
+JSON mode streams Pi events, not a validated final JSON answer. Inspect
+completed messages and errors through `agent_settled`; a failed assistant
+response in JSON mode does not necessarily cause a nonzero exit code.
+RPC keeps a bidirectional connection open for live input and cancellation.
+See [Pi CLI integration](https://pi.dev/docs/latest/cli-integration).
+
+## Development
+
+```sh
+npm ci
+npm test
+npm pack --dry-run
+```
+
+No build step is required. The repository is organized as:
+
+```text
+bin/locus.js                     CLI entry point
+src/cli.js                       Command routing and session-option ownership
+src/settings.js                  Initialization, migration, profile validation
+src/pi.js                        Pi launch, shared state, per-directory locking
+system-prompt.md                  Shared agent identity
+templates/settings.template.json  Starter directory settings
+skills/locus/SKILL.md             Agent-facing usage guide
+test/                            Local tests; no provider credentials required
+```
+
+Tests run automatically before packing. The npm package includes only runtime
+code, templates, the prompt, the skill, and the standard package documentation.
+It excludes local conversations and credentials.
+
+Release preparation is documented in [docs/releasing.md](docs/releasing.md).
+
+MIT licensed. Pi is a separate, MIT-licensed dependency maintained upstream.
