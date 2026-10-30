@@ -87,7 +87,7 @@ Read `bin/locus.js` for the entire implementation.
 
 Edit `system-prompt.md` in this repository, then restart `locus`. Every directory
 uses this shared file, including when resuming an existing conversation. It is
-the identity and behavior of Loki, a persistent directory agent, together with
+the identity and behavior of Locus, a persistent directory agent, together with
 Pi documentation references. Documentation paths point to this installation
 of Pi.
 
