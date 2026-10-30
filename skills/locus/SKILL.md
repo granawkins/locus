@@ -17,14 +17,14 @@ not a filesystem sandbox.
 
 Use an existing installation, or install `@granawkins/locus` with npm when
 installation is part of the user's request. Check `locus --help` if needed.
-Initialize the intended directory with `locus init` if it has no `.locus/`.
+The first conversation command initializes `.locus/` automatically. Use
+`locus init` only to prepare settings before running a task.
 Initialization preserves existing settings and history and creates no
 `AGENTS.md`. Provider authentication is configured interactively through
 Pi's `/login` in `locus`; an unattended run cannot complete login prompts.
 
 ```sh
 cd /path/to/venue
-locus init
 locus -p "Audit the stored events against the venue website. Fix the fetcher if needed, validate the result, and summarize the changes and anything unresolved."
 ```
 

@@ -21,7 +21,6 @@ not need a separate Pi installation. macOS and Windows are not supported yet.
 
 ```sh
 cd /path/to/venue
-locus init
 locus
 ```
 
@@ -29,9 +28,10 @@ Use `/login` to connect a model provider and `/model` to choose a model.
 For OpenAI subscription access, choose **Sign in with ChatGPT** in the OpenAI
 login flow. Authentication and model availability are handled by Pi.
 
-`locus init` creates `.locus/settings.json` with all fields empty. It preserves
-existing settings and history and does not create `AGENTS.md`. The first
-persisted conversation is saved to `.locus/session.jsonl`.
+The first conversation command creates `.locus/settings.json` with all fields
+empty automatically. Existing settings and history are preserved, and no
+`AGENTS.md` is created. The conversation is saved to `.locus/session.jsonl`.
+Use `locus init` only if you want to prepare settings before starting a chat.
 
 ```sh
 locus "Audit your events"             # Chat with an initial task

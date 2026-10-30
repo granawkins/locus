@@ -31,7 +31,6 @@ test('help/version and package installation work without initializing a conversa
   const { directory, agent, env } = workspace(t);
   assert.match((await run(['--help'], directory, env)).stdout, /locus install/);
   assert.equal((await run(['--version'], directory, env)).stdout.trim(), '0.1.0');
-  assert.equal((await run(['-p', 'hello'], directory, env)).code, 1);
   const resource = join(directory, 'resource');
   mkdirSync(resource);
   writeFileSync(join(resource, 'package.json'), JSON.stringify({ name: 'locus-test-resource', version: '0.0.0', pi: { skills: ['./skills'] } }));
@@ -42,6 +41,8 @@ test('help/version and package installation work without initializing a conversa
   assert.ok(settings.packages.some(path => join(agent, path) === resource));
   assert.equal(existsSync(join(directory, '.locus')), false);
   assert.notEqual((await run(['install'], directory, env)).code, 0);
+  assert.equal((await run(['--session', 'other.jsonl'], directory, env)).code, 1);
+  assert.equal(existsSync(join(directory, '.locus')), false);
 });
 
 test('real Pi persists history, loads skills and additive instructions, and respects locks', { timeout: 30000 }, async t => {
@@ -66,6 +67,15 @@ test('real Pi persists history, loads skills and additive instructions, and resp
     models: [{ id: 'test', contextWindow: 32768, maxTokens: 1024 }],
   } } }));
   writeFileSync(join(agent, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'test', defaultTools: ['read', 'bash', 'edit', 'write', 'grep'] }));
+  const fresh = join(directory, 'fresh');
+  mkdirSync(fresh);
+  const freshRun = await run(['--no-extensions', '--no-mcp', '--mode', 'json', 'First visit'], fresh, env);
+  assert.equal(freshRun.code, 0, freshRun.stderr);
+  assert.ok(freshRun.stdout.trim().split('\n').map(JSON.parse).some(event => event.type === 'agent_settled'));
+  assert.ok(existsSync(join(fresh, '.locus/settings.json')));
+  assert.ok(existsSync(join(fresh, '.locus/session.jsonl')));
+  assert.equal(existsSync(join(fresh, 'AGENTS.md')), false);
+  requests.length = 0;
   const skill = join(agent, 'skills', 'audit');
   mkdirSync(skill, { recursive: true });
   writeFileSync(join(skill, 'SKILL.md'), '---\nname: audit\ndescription: Audit the violet anchor.\n---\nKeep the detailed audit record.\n');

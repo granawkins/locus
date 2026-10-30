@@ -1,11 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { initialize, profileArguments } from './settings.js';
 import { launchPi } from './pi.js';
 
 const metadata = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const help = `Usage:
-  locus init                  Initialize the current directory
+  locus init                  Create settings without starting a conversation (optional)
   locus install <source>      Install a Pi package into Locus
   locus                       Open its persistent conversation
   locus "Audit your events"   Open chat with an initial message
@@ -15,6 +14,7 @@ const help = `Usage:
 
 Other arguments pass through to Pi. Use /login, /model, /settings, and
 /reload inside chat. Skills and extensions use Pi's normal discovery.
+Conversation commands initialize the current directory automatically.
 Profile: .locus/settings.json | History: .locus/session.jsonl
 Requires Linux flock and Node.js 22.19 or newer.`;
 
@@ -28,7 +28,6 @@ export function main(args = process.argv.slice(2), directory = process.cwd()) {
   }
   if (args[0] === 'install') return launchPi(args);
 
-  if (!existsSync(join(directory, '.locus'))) throw Error('run locus init in this directory first.');
   const sessionOptions = ['--session', '--session-dir', '--session-id', '--no-session',
     '--continue', '-c', '--resume', '-r', '--fork'];
   const separator = args.indexOf('--');
@@ -37,5 +36,6 @@ export function main(args = process.argv.slice(2), directory = process.cwd()) {
       throw Error('session-selection options are managed by Locus.');
     }
   }
+  initialize(directory);
   return launchPi(args, { directory, profileArgs: profileArguments(directory), conversation: true });
 }
