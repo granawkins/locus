@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 import { execve } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -54,7 +55,10 @@ try {
   execve('/usr/bin/flock', ['flock', '--exclusive', '--nonblock', '--conflict-exit-code', '75',
     join(state, 'lock'), process.execPath, piCli,
     '--session', join(state, 'session.jsonl'), '--session-dir', state,
-    '--system-prompt', systemPrompt, ...args], process.env);
+    '--system-prompt', systemPrompt, ...args], {
+      ...process.env,
+      PI_CODING_AGENT_DIR: process.env.LOCUS_AGENT_DIR || join(homedir(), '.locus', 'agent'),
+    });
 } catch (error) {
   fail(error.message);
 }

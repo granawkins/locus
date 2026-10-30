@@ -42,7 +42,9 @@ locus --mode json "Audit your events" # JSONL progress for another program
 - Existing `AGENTS.md` instructions are still discovered by Pi normally.
 - `.pi/settings.json`, `.pi/skills/`, `.pi/extensions/`, `.pi/mcp.json`: Pi's
   normal project configuration, discovered by Pi without a Locus translation.
-- `~/.pi/agent/`: Pi's shared credentials, settings, skills, and extensions.
+- `~/.locus/agent/`: Shared credentials, settings, model cache, skills, and extensions.
+  Locus sets Pi's `PI_CODING_AGENT_DIR` override to this location. Set
+  `LOCUS_AGENT_DIR` to use another location.
 
 Locus only uses the exact current directory; it does not search for a parent
 agent. It forwards arguments to the installed Pi CLI, fixing the session path
@@ -81,10 +83,10 @@ skill descriptions, and the current working directory. Tool schemas remain
 supplied by Pi; the copied tool descriptions are a static snapshot of its four
 default tools. A caller can explicitly override the file with `--system-prompt`.
 
-There is no Locus-wide memory or `~/.locus` directory. Conversation history
-lives in each directory's `.locus/`. Pi's shared `~/.pi/agent/` directory holds
-configuration, credentials, model cache, and shared resources, not a Locus
-master memory. Previously generated `AGENTS.md` files are left in place;
+There is no Locus-wide memory. Conversation history lives in each directory's
+`.locus/`. The shared `~/.locus/agent/` directory holds configuration,
+credentials, model cache, and shared resources, not a master memory.
+Previously generated `AGENTS.md` files are left in place;
 remove any starter you no longer want manually.
 
 The dependency override pins Pi's HTTP library to a patched version.
