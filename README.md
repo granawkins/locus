@@ -35,6 +35,20 @@ locus --mode json "Audit your events" # JSONL progress for another program
 
 ## What lives where
 
+Install community packages using Pi's normal sources and options:
+
+```sh
+locus install npm:pi-web-access
+locus install /path/to/local-package
+```
+
+This passes directly to Pi's installer using `~/.locus/agent/` (or
+`LOCUS_AGENT_DIR`). It works outside initialized directories and does not
+open a conversation. Restart Locus to load installed resources. Pi's `--local`
+option instead registers the package in the current project's `.pi/settings.json`.
+Packages must support the installed Pi version and may need credentials or
+external programs of their own.
+
 - `.locus/session.jsonl`: Pi's native conversation, created when Pi persists it.
 - `.locus/lock`: OS lock file; safe to leave in place after exit. A second
   invocation fails with exit code 75 while the first is running.
