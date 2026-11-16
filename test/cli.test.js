@@ -31,7 +31,7 @@ function workspace(t) {
 test('help/version and package installation work without initializing a conversation', async t => {
   const { directory, agent, env } = workspace(t);
   assert.match((await run(['--help'], directory, env)).stdout, /locus install/);
-  assert.equal((await run(['--version'], directory, env)).stdout.trim(), '0.1.0');
+  assert.equal((await run(['--version'], directory, env)).stdout.trim(), JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version);
   const resource = join(directory, 'resource');
   mkdirSync(resource);
   writeFileSync(join(resource, 'package.json'), JSON.stringify({ name: 'locus-test-resource', version: '0.0.0', pi: { skills: ['./skills'] } }));
@@ -67,12 +67,13 @@ test('real Pi persists history, loads skills and additive instructions, and resp
     baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: 'openai-completions', apiKey: 'local-test',
     models: [{ id: 'test', contextWindow: 32768, maxTokens: 1024 }],
   } } }));
-  writeFileSync(join(agent, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'test', defaultTools: ['read', 'bash', 'edit', 'write', 'grep'] }));
+  writeFileSync(join(agent, 'settings.json'), JSON.stringify({ defaultProvider: 'mock', defaultModel: 'test', defaultTools: ['read', 'bash', 'edit', 'write', 'grep'], defaultProjectTrust: 'always' }));
   const fresh = join(directory, 'fresh');
   mkdirSync(fresh);
   const freshRun = await run(['--no-extensions', '--no-mcp', '--mode', 'json', 'First visit'], fresh, env);
   assert.equal(freshRun.code, 0, freshRun.stderr);
   assert.ok(freshRun.stdout.trim().split('\n').map(JSON.parse).some(event => event.type === 'agent_settled'));
+  assert.ok(existsSync(join(fresh, '.locus')));
   assert.ok(existsSync(join(fresh, '.locus/settings.json')));
   assert.ok(existsSync(join(fresh, '.locus/session.jsonl')));
   assert.equal(existsSync(join(fresh, 'AGENTS.md')), false);
@@ -100,6 +101,26 @@ test('real Pi persists history, loads skills and additive instructions, and resp
   assert.equal(after[0].id, before[0].id);
   assert.ok(after.length > before.length);
 
+  const source = join(directory, 'source');
+  mkdirSync(source);
+  const sourceInstructions = join(source, 'AGENTS.md');
+  const extraInstructions = join(directory, 'extra.md');
+  writeFileSync(sourceInstructions, 'Keep the green compass.');
+  writeFileSync(extraInstructions, 'Keep the purple compass.');
+  mkdirSync(join(source, '.locus'));
+  writeFileSync(join(source, '.locus/settings.json'), JSON.stringify({
+    defaultTools: ['+find'], enabledModels: ['mock/test'],
+    contextFiles: { include: [extraInstructions], exclude: [join(directory, 'AGENTS.md')] },
+  }));
+  const selected = await run([...flags, '-p', 'Check this source.'], source, env);
+  assert.equal(selected.code, 0, selected.stderr);
+  const selectedSystem = JSON.stringify(requests[2].messages);
+  assert.ok(selectedSystem.includes('green compass'));
+  assert.ok(selectedSystem.includes('purple compass'));
+  assert.ok(selectedSystem.includes('violet anchor'));
+  assert.ok(!selectedSystem.includes('amber compass'));
+  assert.ok(requests[2].tools.some(tool => tool.function?.name === 'find'));
+
   const target = join(directory, '.locus/lock');
   const release = await lockfile.lock(target, { stale: 120000, update: 10000 });
   try {
@@ -108,7 +129,7 @@ test('real Pi persists history, loads skills and additive instructions, and resp
     await release();
   }
   assert.equal((await run(['--session', 'other.jsonl'], directory, env)).code, 1);
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
   mkdirSync(`${target}.lock`);
   const stale = new Date(Date.now() - 180000);
   utimesSync(`${target}.lock`, stale, stale);
