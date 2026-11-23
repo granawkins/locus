@@ -8,10 +8,11 @@ working artifacts kept in the directory. Locus stewards that work over time,
 using Pi's built-in compaction while retaining JSONL history it can inspect.
 
 Built on [Pi](https://pi.dev), Locus supports Pi's conversation CLI modes,
-tools, skills, and [community extensions](https://pi.dev/packages). It inherits
-`AGENTS.md` instructions from the current directory and its ancestors, and
-skills from `.agents/skills/` up to the repository root, following Pi's project
-trust rules. Shared skills and native `.pi/` configuration work normally.
+tools, skills, and [community extensions](https://pi.dev/packages). By default,
+it inherits `AGENTS.md` instructions from the current directory and its
+ancestors, and skills from `.agents/skills/` up to the repository root,
+following Pi's project trust rules. Shared skills and native `.pi/`
+configuration work normally.
 
 ## Install
 
@@ -50,7 +51,7 @@ The first run creates `.locus/` in the current directory:
 
 | File | Purpose |
 |---|---|
-| `settings.json` | This directory's settings. |
+| `settings.json` | This directory's Locus settings. |
 | `session.jsonl` | Cumulative messages, tool results, and compaction records. |
 | `lock` | Lock target; the active lock is maintained in `lock.lock/`. A competing run exits with code 75. |
 
@@ -59,24 +60,83 @@ recoverable after two minutes. The agent can keep notes and other working files 
 settings, skills, and installed packages live in `~/.locus/agent/`; override that
 location with `LOCUS_AGENT_DIR`. There is no shared master conversation.
 
-## Directory settings
+## Settings
 
-Edit `.locus/settings.json`. All fields start empty and are optional.
+Global Pi settings live in `~/.locus/agent/settings.json` (or
+`LOCUS_AGENT_DIR/settings.json`); Pi supports its full settings set there.
+Each Locus directory has `.locus/settings.json`. Locus passes these local
+settings to Pi using CLI options:
 
-| Field | Value |
+| Local field | Effect |
 |---|---|
-| `model` | Pi model reference, such as `provider/model-id`. |
-| `thinking` | Pi reasoning level, such as `medium` or `high`. |
-| `customInstructions` | Text or an existing file path, added to the Locus system prompt. |
-| `tools` | Tool names; plain names replace defaults, `+grep` adds a tool. |
-| `skills` | Extra skill file/directory paths beyond automatic discovery. |
-| `preloadSkills` | Skill file paths whose full instructions are always included in context. |
+| `defaultProvider`, `defaultModel`, `defaultThinkingLevel` | Choose the model and thinking level. A local provider needs a local or global model. |
+| `enabledModels` | Scope available models. |
+| `defaultTools` | Select or modify built-in tools; `[]` disables them. |
+| `skills`, `extensions`, `prompts`, `themes` | Add resource paths. Local lists accept paths, not exclusion patterns or globs. |
+| `theme`, `tuiMode` | Select the initial theme or terminal mode. |
+| `contextFiles` | Include or exclude specific context files. |
 
-Blank values inherit normal Pi settings and saved-session defaults. Paths are
-relative to the working directory; skill paths also accept `~/`. Explicit CLI
-model, thinking, and tool options override these settings. Restart Locus after
-editing this file. `system-prompt.md` in the package defines the shared identity;
-`settings.template.json` defines the initial settings.
+`defaultTools` accepts either tool names or `+name`/`-name` modifiers; the two
+forms cannot be mixed in one local list. An empty `enabledModels` list restores
+all available models. Local resource paths resolve from the working directory.
+
+Pi's other settings have no matching CLI option and are not supported in
+`.locus/settings.json`; put them in the global file. Pi still reads its native
+`.pi/settings.json` when present, subject to project trust. Explicit command
+line options take precedence over Locus's local settings. Older local names
+(`model`, `thinking`, `tools`, `customInstructions`, `preloadSkills`) remain
+supported for existing directories; use Pi's names for new settings. Restart
+Locus after editing settings. `system-prompt.md` defines the shared identity.
+
+Locus reads `contextFiles.include` and `contextFiles.exclude` from both the
+global Pi settings and local `.locus/settings.json`, combining the lists.
+Relative global paths resolve from the agent directory; relative local paths
+resolve from the working directory. `~/` and absolute paths also work.
+
+When either `contextFiles` list is nonempty, Locus starts with Pi's normal
+context-file discovery, removes excluded files, then adds included files even
+outside that discovery path. Exclusion wins if a file appears in both lists;
+symlinked paths are treated as the same file. Each path must name an existing
+file. This setting does not filter other system-prompt additions. Skills are
+unaffected. For example, a source agent can omit repository-wide instructions
+while loading its own:
+
+```json
+{
+  "contextFiles": {
+    "include": ["/absolute/path/to/source/AGENTS.md"],
+    "exclude": ["/absolute/path/to/repo/AGENTS.md"]
+  }
+}
+```
+
+### First-run bootstrap
+
+The global `~/.locus/agent/settings.json` can also contain Locus-only bootstrap
+rules. A rule matches directories exactly `depth` levels below an absolute
+`root`; only matching directories run its command. For example:
+
+```json
+{
+  "bootstrap": [{
+    "root": "/srv/cityhappenings/sources",
+    "depth": 2,
+    "command": ["python3", "/srv/cityhappenings/.agents/skills/source-management/scripts/bootstrap.py"]
+  }]
+}
+```
+
+On the first conversation in a matching directory, Locus creates `.locus/`,
+then runs `command prepare DIRECTORY` before loading Pi's context. The command
+prepares local instructions/settings and prints JSON containing a `prompt`
+string (or `null` if already set up). Locus sends a non-null prompt as a first
+turn in the same persistent session, then runs `command verify DIRECTORY`.
+Only successful verification writes `.locus/bootstrap-complete` and forwards
+the original command. A failed setup leaves the original command unsent and
+retries on the next invocation. Later calls check only the marker. Setup
+output goes to stderr so JSON/RPC output for the original command stays clean.
+Both turns hold one directory lock. `locus init`, help, version, and package
+installation do not run bootstrap.
 
 ## Use from another agent
 
