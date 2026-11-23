@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import lockfile from 'proper-lockfile';
 import { fileURLToPath } from 'node:url';
 import { loadProjectContextFiles } from '@earendil-works/pi-coding-agent';
+import { bootstrapRule, runBootstrapHook } from './bootstrap.js';
 
 const template = new URL('../settings.template.json', import.meta.url);
 
@@ -147,26 +148,37 @@ export function profileArguments(directory, agentDir = process.env.LOCUS_AGENT_D
 }
 
 
-export async function launchPi(args, { directory, profileArgs = [], conversation = false } = {}) {
+async function withDirectoryLock(directory, run) {
+  const target = join(directory, '.locus', 'lock');
+  writeFileSync(target, '', { flag: 'a' });
+  let release;
+  try {
+    release = await lockfile.lock(target, { stale: 120000, update: 10000, retries: 0 });
+  } catch (error) {
+    if (error.code !== 'ELOCKED') throw error;
+    console.error('locus: another process is using this directory.');
+    process.exitCode = 75;
+    return 75;
+  }
+  try { return await run(); }
+  finally { await release(); }
+}
+
+export async function launchPi(args, { directory, profileArgs = [], conversation = false,
+  lockHeld = false, stdio = 'inherit' } = {}) {
+  if (conversation && !lockHeld) {
+    return withDirectoryLock(directory, () => launchPi(args, {
+      directory, profileArgs, conversation, lockHeld: true, stdio,
+    }));
+  }
   const entry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));
   const cli = join(dirname(entry), 'bundle', 'cli.js');
   const env = {
     ...process.env,
     PI_CODING_AGENT_DIR: process.env.LOCUS_AGENT_DIR || join(homedir(), '.locus', 'agent'),
   };
-  let release = async () => {};
   if (conversation) {
     const state = join(directory, '.locus');
-    const target = join(state, 'lock');
-    writeFileSync(target, '', { flag: 'a' });
-    try {
-      release = await lockfile.lock(target, { stale: 120000, update: 10000, retries: 0 });
-    } catch (error) {
-      if (error.code !== 'ELOCKED') throw error;
-      console.error('locus: another process is using this directory.');
-      process.exitCode = 75;
-      return;
-    }
     const prompt = fileURLToPath(new URL('../system-prompt.md', import.meta.url));
     const docs = `Installed Pi package: ${dirname(dirname(entry))}\nLocus package: ${fileURLToPath(new URL('../', import.meta.url))}`;
     args = ['--session', join(state, 'session.jsonl'), '--session-dir', state,
@@ -174,7 +186,7 @@ export async function launchPi(args, { directory, profileArgs = [], conversation
   }
   const handlers = new Map();
   try {
-    const child = spawn(process.execPath, [cli, ...args], { stdio: 'inherit', env });
+    const child = spawn(process.execPath, [cli, ...args], { stdio, env });
     for (const signal of process.platform === 'win32' ? ['SIGINT', 'SIGTERM'] : ['SIGINT', 'SIGTERM', 'SIGHUP']) {
       const handler = () => child.kill(signal);
       handlers.set(signal, handler);
@@ -184,9 +196,9 @@ export async function launchPi(args, { directory, profileArgs = [], conversation
       child.once('error', reject);
       child.once('close', (code, signal) => resolve(code ?? (signal === 'SIGINT' ? 130 : 143)));
     });
+    return process.exitCode;
   } finally {
     for (const [signal, handler] of handlers) process.off(signal, handler);
-    await release();
   }
 }
 
@@ -225,8 +237,32 @@ export async function main(args = process.argv.slice(2), directory = process.cwd
       throw Error('session-selection options are managed by Locus.');
     }
   }
-  initialize(directory);
-  return launchPi(args, { directory, profileArgs: profileArguments(directory), conversation: true });
+  const agentDir = process.env.LOCUS_AGENT_DIR || join(homedir(), '.locus', 'agent');
+  const rule = bootstrapRule(directory, agentDir);
+  if (!rule) {
+    initialize(directory);
+    return launchPi(args, { directory, profileArgs: profileArguments(directory, agentDir), conversation: true });
+  }
+  mkdirSync(join(directory, '.locus'), { recursive: true });
+  return withDirectoryLock(directory, async () => {
+    const marker = join(directory, '.locus', 'bootstrap-complete');
+    if (!existsSync(marker)) {
+      const setupPrompt = runBootstrapHook(rule, 'prepare', directory);
+      initialize(directory);
+      if (setupPrompt) {
+        const code = await launchPi(['-p', setupPrompt], {
+          directory, profileArgs: profileArguments(directory, agentDir), conversation: true,
+          lockHeld: true, stdio: ['inherit', 2, 'inherit'],
+        });
+        if (code !== 0) return code;
+      }
+      runBootstrapHook(rule, 'verify', directory);
+      writeFileSync(marker, 'Setup complete.\n', { flag: 'wx' });
+    } else initialize(directory);
+    return launchPi(args, {
+      directory, profileArgs: profileArguments(directory, agentDir), conversation: true, lockHeld: true,
+    });
+  });
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -25,10 +25,12 @@ Database integrations and completion evidence are project-specific.
   competing runs exit 75. Forced termination can leave a lock stale for two
   minutes. There is no global queue.
 - Global `~/.locus/agent/settings.json` (or `LOCUS_AGENT_DIR/settings.json`)
-  supports Pi's full settings set. Local `.locus/settings.json` supports model,
-  thinking, tool, resource, theme, and context-file options with Pi's field
-  names. Locus combines global and local `contextFiles` lists. Restart after
-  edits; never edit Pi's session files.
+  supports Pi's full settings set and optional first-run `bootstrap` rules.
+  A matching rule prepares instructions before context loads, runs setup once,
+  then forwards the original request after verification. Local
+  `.locus/settings.json` supports model, thinking, tool, resource, theme, and
+  context-file options with Pi's field names. Locus combines global and local
+  `contextFiles` lists. Restart after edits; never edit Pi's session files.
 - Pi discovers ancestor `AGENTS.md` and `.agents/skills/` (skills stop at the
   repository root). Project resources require trust; unattended jobs need
   saved trust or an explicit authorized `--approve` decision.

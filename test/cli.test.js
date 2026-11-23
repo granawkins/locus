@@ -136,3 +136,69 @@ test('real Pi persists history, loads skills and additive instructions, and resp
   assert.equal((await run([...flags, '-p', 'recover a stale lock'], directory, env)).code, 0);
   assert.equal(existsSync(`${target}.lock`), false);
 });
+
+test('bootstrap prepares context, verifies setup, and forwards the original request once', { timeout: 30000 }, async t => {
+  const { directory, agent, env } = workspace(t);
+  const sourceRoot = join(directory, 'sources');
+  const source = join(sourceRoot, 'city', 'venue');
+  mkdirSync(source, { recursive: true });
+  writeFileSync(join(directory, 'AGENTS.md'), 'Root instructions must stay out.');
+  const hook = join(directory, 'bootstrap.cjs');
+  writeFileSync(hook, `const fs = require('fs'); const path = require('path');
+const [action, dir] = process.argv.slice(2);
+if (action === 'prepare') {
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'Local source instructions.');
+  fs.writeFileSync(path.join(dir, '.locus/settings.json'), JSON.stringify({ contextFiles: {
+    exclude: [path.join(dir, '../../../AGENTS.md')],
+  } }));
+  console.log(JSON.stringify({ prompt: 'Set up this source first.' }));
+} else if (action === 'verify') {
+  if (process.env.BOOTSTRAP_VERIFY_FAIL ||
+      !fs.readFileSync(path.join(dir, '.locus/session.jsonl'), 'utf8').includes('Set up this source first.')) process.exit(2);
+}`);
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    requests.push(JSON.parse(body));
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    response.write(`data: ${JSON.stringify({ id: 'bootstrap-test', object: 'chat.completion.chunk', created: 1,
+      model: 'test', choices: [{ index: 0, delta: { role: 'assistant', content: 'Done.' }, finish_reason: null }] })}\n\n`);
+    response.write(`data: ${JSON.stringify({ id: 'bootstrap-test', object: 'chat.completion.chunk', created: 1,
+      model: 'test', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
+    response.end('data: [DONE]\n\n');
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => server.close());
+  writeFileSync(join(agent, 'models.json'), JSON.stringify({ providers: { mock: {
+    baseUrl: `http://127.0.0.1:${server.address().port}/v1`, api: 'openai-completions', apiKey: 'local-test',
+    models: [{ id: 'test', contextWindow: 32768, maxTokens: 1024 }],
+  } } }));
+  writeFileSync(join(agent, 'settings.json'), JSON.stringify({
+    defaultProvider: 'mock', defaultModel: 'test', defaultProjectTrust: 'always',
+    bootstrap: [{ root: sourceRoot, depth: 2, command: [process.execPath, hook] }],
+  }));
+
+  const flags = ['--no-extensions', '--no-mcp', '--mode', 'json'];
+  assert.equal((await run(['init'], source, env)).code, 0);
+  assert.equal(existsSync(join(source, 'AGENTS.md')), false);
+  const failed = await run([...flags, 'Repair the fetcher.'], source, { ...env, BOOTSTRAP_VERIFY_FAIL: '1' });
+  assert.equal(failed.code, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(existsSync(join(source, '.locus/bootstrap-complete')), false);
+  const first = await run([...flags, 'Repair the fetcher.'], source, env);
+  assert.equal(first.code, 0, first.stderr);
+  assert.ok(first.stdout.trim().split('\n').map(JSON.parse).some(event => event.type === 'agent_settled'));
+  assert.equal(requests.length, 3);
+  assert.ok(JSON.stringify(requests[1].messages).includes('Set up this source first.'));
+  assert.ok(!JSON.stringify(requests[1].messages).includes('Repair the fetcher.'));
+  assert.ok(JSON.stringify(requests[2].messages).includes('Repair the fetcher.'));
+  assert.ok(JSON.stringify(requests[2].messages).includes('Local source instructions.'));
+  assert.ok(!JSON.stringify(requests[2].messages).includes('Root instructions must stay out.'));
+  assert.ok(existsSync(join(source, '.locus/bootstrap-complete')));
+
+  const second = await run(['--no-extensions', '--no-mcp', '-p', 'Continue.'], source, env);
+  assert.equal(second.code, 0, second.stderr);
+  assert.equal(requests.length, 4);
+});

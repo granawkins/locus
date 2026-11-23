@@ -110,6 +110,34 @@ while loading its own:
 }
 ```
 
+### First-run bootstrap
+
+The global `~/.locus/agent/settings.json` can also contain Locus-only bootstrap
+rules. A rule matches directories exactly `depth` levels below an absolute
+`root`; only matching directories run its command. For example:
+
+```json
+{
+  "bootstrap": [{
+    "root": "/srv/cityhappenings/sources",
+    "depth": 2,
+    "command": ["python3", "/srv/cityhappenings/.agents/skills/source-management/scripts/bootstrap.py"]
+  }]
+}
+```
+
+On the first conversation in a matching directory, Locus creates `.locus/`,
+then runs `command prepare DIRECTORY` before loading Pi's context. The command
+prepares local instructions/settings and prints JSON containing a `prompt`
+string (or `null` if already set up). Locus sends a non-null prompt as a first
+turn in the same persistent session, then runs `command verify DIRECTORY`.
+Only successful verification writes `.locus/bootstrap-complete` and forwards
+the original command. A failed setup leaves the original command unsent and
+retries on the next invocation. Later calls check only the marker. Setup
+output goes to stderr so JSON/RPC output for the original command stays clean.
+Both turns hold one directory lock. `locus init`, help, version, and package
+installation do not run bootstrap.
+
 ## Use from another agent
 
 Run `locus -p "task"` with the target directory as the working directory and
