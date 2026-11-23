@@ -56,8 +56,9 @@ function contextArguments(directory, selections, agentDir) {
   }
   if (!include.length && !exclude.length) return [];
 
-  const canonical = ({ path, base }) => {
-    const resolved = resolve(base, path.startsWith('~/') ? join(homedir(), path.slice(2)) : path);
+  const absolute = ({ path, base }) => resolve(base, path.startsWith('~/') ? join(homedir(), path.slice(2)) : path);
+  const canonical = entry => {
+    const resolved = absolute(entry);
     try {
       if (statSync(resolved).isFile()) return realpathSync(resolved);
     } catch (error) {
@@ -74,7 +75,7 @@ function contextArguments(directory, selections, agentDir) {
   }
   for (const entry of include) {
     const identity = canonical(entry);
-    if (!omitted.has(identity) && !selected.has(identity)) selected.set(identity, identity);
+    if (!omitted.has(identity) && !selected.has(identity)) selected.set(identity, absolute(entry));
   }
   return ['--no-context-files', ...[...selected.values()].flatMap(path => ['--append-system-prompt', path])];
 }
